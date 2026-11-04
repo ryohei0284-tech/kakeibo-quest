@@ -166,6 +166,24 @@
   #auth button{margin-top:12px;width:100%;border:none;border-radius:16px;background:linear-gradient(90deg,var(--pri),var(--pri2));color:#fff;font-family:inherit;font-weight:900;font-size:17px;padding:14px;box-shadow:0 4px 0 #d94a7e}
   #auth .err{color:var(--bad);font-weight:800;font-size:13px;min-height:18px;margin-top:8px}
 
+  /* グラフ */
+  .chart{width:100%;height:auto;display:block}
+  .chart .grid{stroke:var(--sub);stroke-opacity:.22;stroke-width:1}
+  .chart .zero{stroke:var(--bad);stroke-opacity:.6;stroke-width:1.5;stroke-dasharray:3 3}
+  .chart .ideal{stroke:var(--sub);stroke-opacity:.7;stroke-width:2.5;stroke-dasharray:6 5;stroke-linecap:round}
+  .chart .actual{fill:none;stroke:var(--ok);stroke-width:4;stroke-linejoin:round;stroke-linecap:round}
+  .chart .dot{fill:var(--ok);stroke:#fff;stroke-width:2.5}
+  .axt{font-size:11px;font-weight:700;fill:var(--sub);font-family:inherit}
+  .ctr{font-size:17px;font-weight:900;fill:var(--ink);font-family:inherit}
+  .pie-wrap{display:flex;align-items:center;gap:10px}
+  .donut{width:140px;height:140px;flex:0 0 auto}
+  .legend{flex:1;min-width:0}
+  .lg{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;padding:3px 0}
+  .lg i{width:11px;height:11px;border-radius:4px;flex:0 0 auto}
+  .lg .ln{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lg .la{flex:0 0 auto;text-align:right}
+  .lg .la small{display:block;font-size:11px;color:var(--sub);font-weight:700}
+
   /* ダークモード（iPhone の設定に自動で合わせる） */
   :root{color-scheme:light dark}
   @media (prefers-color-scheme: dark){
@@ -241,6 +259,16 @@
   <button class="go" id="go" disabled>金額と項目を選んでね</button>
 
   <div class="card" style="margin-top:14px">
+    <div class="list-head"><h3>📉 予算の減り方</h3><span class="sum">灰＝理想　緑＝実際</span></div>
+    <div id="lineChart"></div>
+  </div>
+
+  <div class="card">
+    <div class="list-head"><h3>🍙 今月の使い道</h3><span class="sum" id="pieSum"></span></div>
+    <div id="pieChart"></div>
+  </div>
+
+  <div class="card">
     <div class="list-head"><h3 id="listTitle">今月の記録</h3><span class="sum" id="listSum"></span></div>
     <div id="entries"></div>
     <button class="undo" id="undoBtn" style="display:none">↩️ 直前の1件を取り消す</button>
@@ -448,9 +476,79 @@ function render(st){
     if(S.cat){ var el = document.querySelector('.cat[data-c="'+S.cat+'"]'); if(el) el.classList.add('on'); }
   }
   renderEntries(st);
+  try{ renderCharts(st); }catch(e){}
   $('undoBtn').style.display = S.canUndo ? 'inline-block' : 'none';
 }
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+
+/* ---------- グラフ（スプシの「予算の減り方」「今月の使い道」と同じ数字） ---------- */
+var PIE_COLS = ['#ff6b9d','#ff9a5a','#ffc83d','#35c58a','#5aa9ff','#b58cff','#ff7a7a','#4fd1c5','#a0aec0'];
+function fmtK(v){
+  var a = Math.abs(v);
+  if(a >= 10000){ var m = Math.round(a/1000)/10; return (v<0?'-':'')+m+'万'; }
+  return String(v);
+}
+function renderCharts(st){
+  /* 折れ線：理想（予算を30日で割って減らす）と実際（予算−その日までの合計） */
+  var budget = st.budget || 0;
+  var todayD = Number(String(st.today).slice(8,10));
+  var ym = String(st.today).slice(0,7);
+  var dim = new Date(Number(ym.slice(0,4)), Number(ym.slice(5,7)), 0).getDate();
+  var spent = {};
+  (st.entries||[]).forEach(function(e){
+    if(String(e.date).slice(0,7) !== ym) return;
+    var d = Number(String(e.date).slice(8,10)); spent[d] = (spent[d]||0) + e.amount;
+  });
+  var actual = [], run = 0, d;
+  for(d=0; d<=todayD; d++){ run += (d>=1 ? (spent[d]||0) : 0); actual.push(budget - run); }
+  var maxD = Math.max(30, dim);
+  var yMax = budget, yMin = 0;
+  actual.forEach(function(v){ if(v>yMax) yMax=v; if(v<yMin) yMin=v; });
+  if(yMax <= yMin) yMax = yMin + 1;
+  var W=340,H=200,L=44,R=12,T=14,B=26;
+  function X(x){ return L + (W-L-R)*x/maxD; }
+  function Y(v){ return T + (H-T-B)*(1-(v-yMin)/(yMax-yMin)); }
+  var s = '<svg viewBox="0 0 '+W+' '+H+'" class="chart" role="img" aria-label="予算の減り方">';
+  [yMin, (yMin+yMax)/2, yMax].forEach(function(v, i){
+    var y = Y(v);
+    s += '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" class="grid"/>';
+    s += '<text x="'+(L-6)+'" y="'+(y+4)+'" text-anchor="end" class="axt">'+fmtK(Math.round(v))+'</text>';
+  });
+  if(yMin < 0){ var y0 = Y(0); s += '<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y0+'" y2="'+y0+'" class="zero"/>'; }
+  [0,10,20,30].forEach(function(x){
+    if(x>maxD) return;
+    s += '<text x="'+X(x)+'" y="'+(H-8)+'" text-anchor="middle" class="axt">'+x+'日</text>';
+  });
+  s += '<line x1="'+X(0)+'" y1="'+Y(budget)+'" x2="'+X(30)+'" y2="'+Y(0)+'" class="ideal"/>';
+  var pts = actual.map(function(v,i){ return X(i).toFixed(1)+','+Y(v).toFixed(1); }).join(' ');
+  if(actual.length>1) s += '<polyline points="'+pts+'" class="actual"/>';
+  var lx = X(actual.length-1), ly = Y(actual[actual.length-1]);
+  s += '<circle cx="'+lx+'" cy="'+ly+'" r="5.5" class="dot"/>';
+  s += '</svg>';
+  $('lineChart').innerHTML = s;
+
+  /* ドーナツ：今月の項目ごとの合計 */
+  var cats = st.categories || [], sums = {}, total = 0;
+  (st.entries||[]).forEach(function(e){ sums[e.category] = (sums[e.category]||0) + e.amount; total += e.amount; });
+  $('pieSum').textContent = total ? yen(total) : '';
+  var items = Object.keys(sums).filter(function(k){ return sums[k]>0; }).map(function(k){
+    var ci = cats.indexOf(k);
+    return { name:k, amt:sums[k], col:PIE_COLS[(ci<0?cats.length:ci) % PIE_COLS.length] };
+  }).sort(function(a,b){ return b.amt-a.amt; });
+  if(!items.length){ $('pieChart').innerHTML = '<div class="empty-list">記録が入ると、ここに円グラフが出るよ🍩</div>'; return; }
+  var r=52, C=2*Math.PI*r, off=0;
+  var p = '<svg viewBox="0 0 140 140" class="donut" role="img" aria-label="今月の使い道"><g transform="rotate(-90 70 70)">';
+  items.forEach(function(it){
+    var len = C*it.amt/total;
+    p += '<circle cx="70" cy="70" r="'+r+'" fill="none" stroke="'+it.col+'" stroke-width="24" stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'"/>';
+    off += len;
+  });
+  p += '</g><text x="70" y="66" text-anchor="middle" class="axt">合計</text><text x="70" y="86" text-anchor="middle" class="ctr">'+fmtK(total)+'</text></svg>';
+  var lg = items.map(function(it){
+    return '<div class="lg"><i style="background:'+it.col+'"></i><span class="ln">'+(EMOJI[it.name]||'🪙')+' '+esc(it.name)+'</span><span class="la">'+yen(it.amt)+'<small>'+Math.round(it.amt/total*100)+'%</small></span></div>';
+  }).join('');
+  $('pieChart').innerHTML = '<div class="pie-wrap">'+p+'<div class="legend">'+lg+'</div></div>';
+}
 
 /* ---------- 今月の記録（一覧） ---------- */
 var WD = ['日','月','火','水','木','金','土'];
