@@ -7,7 +7,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="家計クエスト">
-<meta name="theme-color" content="#fff6e5">
+<meta name="theme-color" content="#fff6e5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15101c" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="apple-touch-icon.png">
 <title>家計クエスト</title>
@@ -164,6 +165,42 @@
   #auth input{width:100%;font-size:16px;font-family:inherit;border:2px solid #eadff3;border-radius:12px;padding:12px;-webkit-user-select:text;user-select:text}
   #auth button{margin-top:12px;width:100%;border:none;border-radius:16px;background:linear-gradient(90deg,var(--pri),var(--pri2));color:#fff;font-family:inherit;font-weight:900;font-size:17px;padding:14px;box-shadow:0 4px 0 #d94a7e}
   #auth .err{color:var(--bad);font-weight:800;font-size:13px;min-height:18px;margin-top:8px}
+
+  /* ダークモード（iPhone の設定に自動で合わせる） */
+  :root{color-scheme:light dark}
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg1:#15101c; --bg2:#241a33; --ink:#f3ecfa; --sub:#a999bd;
+      --card:#2b2139cc; --warn:#ffc24a;
+    }
+    body{background-attachment:fixed}
+    .card{box-shadow:0 4px 14px #0006}
+    .bar{background:#3d3150}
+    .chip{background:#3a2e4b;box-shadow:0 1px 4px #0005}
+    .amount.empty{color:#5d4f72}
+    .pad button{background:#3a2e4b;box-shadow:0 3px 0 #1d1528}
+    .pad button:active{box-shadow:0 0 0 #1d1528}
+    .pad .del{background:#4a2c3c;box-shadow:0 3px 0 #2b1822}
+    .cat{background:#3a2e4b;box-shadow:0 3px 0 #1d1528}
+    .cat.on{background:#4d2d44;box-shadow:0 5px 14px #ff6b9d55}
+    .seg{background:#33283f}
+    .seg button.on{background:#4a3c5e;color:var(--ink);box-shadow:0 1px 4px #0006}
+    input[type=text],input[type=date],input[type=tel]{background:#33283f;border-color:#4d3f63;color:var(--ink)}
+    ::placeholder{color:#8a7aa0}
+    #edit,#cele{background:#000a}
+    .sheet{background:#261d33}
+    .b-del{background:#4a2c3c}
+    .b-close{background:#3a2e4b}
+    .go[disabled]{box-shadow:0 6px 0 #4a3b52;background:linear-gradient(90deg,#5a4560,#5a5060)}
+    .ent{background:#3a2e4b;box-shadow:0 2px 0 #1d1528}
+    .ent .go-r{color:#6f5f86}
+    .undo{background:#3a2e4b}
+    .pop-card{background:#2f2540;box-shadow:0 14px 40px #000a}
+    .pop-card button{background:#f3ecfa;color:#241a33}
+    #toast{background:#f3ecfa;color:#241a33}
+    #auth .box{background:#2f2540;box-shadow:0 14px 40px #000a}
+    #auth input{background:#33283f;border-color:#4d3f63;color:var(--ink)}
+  }
 </style>
 </head>
 <body>
