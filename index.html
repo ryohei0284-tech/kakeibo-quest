@@ -81,8 +81,13 @@
   }
 
   /* 編集ウィンドウ（下から出てくる） */
-  #edit{position:fixed;inset:0;display:none;z-index:25;background:#3b2f4a66}
-  #edit.show{display:block;animation:fade .2s}
+  #edit,#bud{position:fixed;inset:0;display:none;z-index:25;background:#3b2f4a66}
+  #edit.show,#bud.show{display:block;animation:fade .2s}
+  #bud .sheet input[type=tel]{font-size:34px}
+  .bud-q{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .bud-q button{flex:1;min-width:0;border:none;border-radius:12px;background:#efe6f5;color:var(--ink);font-family:inherit;font-weight:800;font-size:14px;padding:10px 6px}
+  #bud .hint{font-size:13px;color:var(--sub);font-weight:700;line-height:1.6;margin:0 0 6px}
+  #hpSub{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
   .sheet{
     position:absolute;left:0;right:0;bottom:0;max-height:92vh;overflow:auto;background:#fff8fb;
     border-radius:26px 26px 0 0;padding:18px 16px max(20px,env(safe-area-inset-bottom));
@@ -205,7 +210,8 @@
     .seg button.on{background:#4a3c5e;color:var(--ink);box-shadow:0 1px 4px #0006}
     input[type=text],input[type=date],input[type=tel]{background:#33283f;border-color:#4d3f63;color:var(--ink)}
     ::placeholder{color:#8a7aa0}
-    #edit,#cele{background:#000a}
+    #edit,#bud,#cele{background:#000a}
+    .bud-q button{background:#3a2e4b}
     .sheet{background:#261d33}
     .b-del{background:#4a2c3c}
     .b-close{background:#3a2e4b}
@@ -296,6 +302,24 @@
   </div>
 </div>
 
+<div id="bud">
+  <div class="sheet">
+    <h2 id="budTitle">💰 予算を決めよう</h2>
+    <p class="hint" id="budHint"></p>
+    <div class="lab">今月の予算（円）</div>
+    <input type="tel" id="bAmount" inputmode="numeric" placeholder="0">
+    <div class="bud-q">
+      <button id="bSame">先月と同じ</button>
+      <button id="bM">−1万</button>
+      <button id="bP">＋1万</button>
+    </div>
+    <div class="btns">
+      <button class="b-close" id="bClose">あとで</button>
+      <button class="b-save" id="bSave">決めた！</button>
+    </div>
+  </div>
+</div>
+
 <div id="auth"><div class="box">
   <div class="big">🔑</div>
   <h2>合言葉を入れてね</h2>
@@ -329,7 +353,7 @@ window.google = {script:{get run(){
   var o = {ok:null, ng:null,
     withSuccessHandler:function(f){this.ok=f;return this},
     withFailureHandler:function(f){this.ng=f;return this}};
-  ['getState','addEntry','updateEntry','deleteEntry','undoLast'].forEach(function(n){
+  ['getState','addEntry','updateEntry','deleteEntry','undoLast','setBudget'].forEach(function(n){
     o[n] = function(a){
       var s = this;
       callApi(n, a).then(function(d){ if(s.ok) s.ok(d); }).catch(function(e){
@@ -466,7 +490,7 @@ function render(st){
   $('hpV').textContent = yen(st.hp);
   var bar = $('hpBar'); bar.style.width = pct+'%';
   bar.style.background = pct>50?'var(--ok)':pct>20?'var(--warn)':'var(--bad)';
-  $('hpSub').textContent = '予算 '+yen(st.budget)+'（'+Math.round(pct)+'%）';
+  $('hpSub').textContent = '予算 '+yen(st.budget)+'（'+Math.round(pct)+'%）✏️';
   $('daysLeft').textContent = '月末まで '+st.daysLeft;
   $('mission').textContent = '🎯 今日の使える額 '+yen(st.todayAvail)+'　／　今日 '+yen(st.todayUsed);
   $('chipStreak').textContent = '🔥 '+st.streak+' 連続';
@@ -477,6 +501,8 @@ function render(st){
   }
   renderEntries(st);
   try{ renderCharts(st); }catch(e){}
+  // 月が変わって最初に開いたときは、予算を聞く（1回開くごとに1回だけ）
+  if(st.needBudget && !S.budAsked && !E.item){ S.budAsked = true; openBudget(true); }
   $('undoBtn').style.display = S.canUndo ? 'inline-block' : 'none';
 }
 function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
@@ -501,7 +527,7 @@ function renderCharts(st){
   });
   var actual = [], run = 0, d;
   for(d=0; d<=todayD; d++){ run += (d>=1 ? (spent[d]||0) : 0); actual.push(budget - run); }
-  var maxD = Math.max(30, dim);
+  var maxD = dim; // スプシと同じ：理想の線はその月の日数で割る
   var yMax = budget, yMin = 0;
   actual.forEach(function(v){ if(v>yMax) yMax=v; if(v<yMin) yMin=v; });
   if(yMax <= yMin) yMax = yMin + 1;
@@ -519,7 +545,7 @@ function renderCharts(st){
     if(x>maxD) return;
     s += '<text x="'+X(x)+'" y="'+(H-8)+'" text-anchor="middle" class="axt">'+x+'日</text>';
   });
-  s += '<line x1="'+X(0)+'" y1="'+Y(budget)+'" x2="'+X(30)+'" y2="'+Y(0)+'" class="ideal"/>';
+  s += '<line x1="'+X(0)+'" y1="'+Y(budget)+'" x2="'+X(maxD)+'" y2="'+Y(0)+'" class="ideal"/>';
   var pts = actual.map(function(v,i){ return X(i).toFixed(1)+','+Y(v).toFixed(1); }).join(' ');
   if(actual.length>1) s += '<polyline points="'+pts+'" class="actual"/>';
   var lx = X(actual.length-1), ly = Y(actual[actual.length-1]);
@@ -730,6 +756,46 @@ function burst(n){
     if(++t<110) requestAnimationFrame(frame); else g.clearRect(0,0,cv.width,cv.height);
   })();
 }
+
+/* ---------- 予算を決める・変える ---------- */
+var BUD = {newMonth:false, busy:false};
+function budVal(){ return Number(String($('bAmount').value).replace(/[^\d]/g,'')) || 0; }
+function budSet(n){ n = Math.max(0, Math.round(n)); $('bAmount').value = n ? n.toLocaleString('ja-JP') : ''; }
+function openBudget(newMonth){
+  var st = S.state || {};
+  BUD.newMonth = !!newMonth;
+  $('budTitle').textContent = newMonth ? '🌸 '+(st.monthLabel||'今月')+'の予算を決めよう' : '✏️ 予算を変える';
+  $('budHint').textContent = newMonth
+    ? '月が変わったよ！今月はいくらで過ごす？決めるまでは先月の予算で計算してるよ。'
+    : '今月の予算を変えると、残りHPやグラフもすぐ計算し直すよ。';
+  $('bClose').textContent = newMonth ? 'あとで' : '閉じる';
+  $('bSame').textContent = (newMonth ? '先月と同じ ' : '今のまま ') + yen(st.prevBudget || st.budget || 0);
+  $('bSame').setAttribute('data-v', st.prevBudget || st.budget || 0);
+  budSet(st.prevBudget || st.budget || 0);
+  BUD.busy = false; $('bSave').textContent = '決めた！';
+  $('bud').classList.add('show');
+}
+function closeBudget(){ $('bud').classList.remove('show'); }
+$('hpSub').addEventListener('click', function(){ if(S.state) openBudget(false); });
+$('bAmount').addEventListener('input', function(){ budSet(budVal()); });
+$('bSame').addEventListener('click', function(){ budSet(Number($('bSame').getAttribute('data-v'))); beep(660,.05); });
+$('bM').addEventListener('click', function(){ budSet(budVal()-10000); beep(520,.05); });
+$('bP').addEventListener('click', function(){ budSet(budVal()+10000); beep(780,.05); });
+$('bClose').addEventListener('click', closeBudget);
+$('bud').addEventListener('click', function(e){ if(e.target.id==='bud') closeBudget(); });
+$('bSave').addEventListener('click', function(){
+  if(BUD.busy) return;
+  var amt = budVal();
+  if(!(amt>0)){ toast('予算の金額を入れてね'); return; }
+  BUD.busy = true; $('bSave').textContent = '💾 保存中…';
+  google.script.run
+    .withSuccessHandler(function(st){
+      BUD.busy = false; render(st); renderGo(); closeBudget();
+      toast(BUD.newMonth ? '🌸 '+st.monthLabel+'の予算は '+yen(amt)+'！いってらっしゃい💪' : '✅ 予算を '+yen(amt)+' に変えたよ');
+    })
+    .withFailureHandler(function(err){ BUD.busy=false; $('bSave').textContent='決めた！'; toast('😢 '+(err&&err.message||err)); })
+    .setBudget({amount:amt});
+});
 
 /* ---------- 起動 ---------- */
 buildPad(); renderAmount(false); renderGo();
